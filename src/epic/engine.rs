@@ -301,6 +301,16 @@ pub fn accept(ctx: &EngineCtx, epic_id: &str, o: AcceptOptions) -> Result<Epic> 
     super::validate_plan(&plan, &PlanRules { max_tasks: cfg.config.epic.max_tasks.max(plan.tasks.len()), workflows: &workflows, existing_keys: &[] })?;
     let chosen: Vec<PlanTask> = plan.tasks.iter().filter(|t| selected.contains(&t.key)).cloned().collect();
     let order = super::topo_order(&chosen).map_err(|c| anyhow::anyhow!("dependency cycle: {c}"))?;
+    // Refuse before creating anything: a bad or taken branch on any chosen
+    // task must not leave earlier tasks queued (a half-accepted epic).
+    for t in &chosen {
+        if let Some(b) = &t.branch {
+            crate::git::validate_branch_name(&e.repo_root, b).with_context(|| format!("{}: invalid branch {b:?}", t.key))?;
+            if crate::git::branch_exists(&e.repo_root, b) {
+                bail!("{}: branch {b} already exists; change it (epic edit) or delete the old branch", t.key);
+            }
+        }
+    }
     let mut created: BTreeMap<String, String> = BTreeMap::new();
     for key in &order {
         let t = chosen.iter().find(|t| &t.key == key).unwrap();
@@ -312,6 +322,7 @@ pub fn accept(ctx: &EngineCtx, epic_id: &str, o: AcceptOptions) -> Result<Epic> 
             base_ref: o.base_ref.clone(),
             step_runners: o.step_runners.clone(),
             scope: t.scope.clone(),
+            branch: t.branch.clone(),
             extra_checks: t.verification.checks.clone(),
             extra_commands: t.verification.commands.clone(),
             ..Default::default()

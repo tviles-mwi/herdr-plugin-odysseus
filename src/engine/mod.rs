@@ -547,7 +547,7 @@ pub fn orchestrator_instructions(run: &Run, step_id: &str, attempt: u32, worktre
             "acceptance": ["<criterion a reviewer can check against code and tests>", "..."],
             "verification": {"checks": ["tests" | "lint" | "security"], "commands": [["<argv>", "..."]], "manual": ["<only what a human can check>"]},
             "depends_on": ["<keys of tasks that must land first>"], "adr_refs": ["<section of the ADR>"],
-            "scope": ["<path globs this task will change, e.g. src/webhooks/**>"], "risk": "low" | "medium" | "high"}],
+            "scope": ["<path globs this task will change, e.g. src/webhooks/**>"], "risk": "low" | "medium" | "high", "branch": "<optional: exact git branch name for this task>"}],
  "out_of_scope": ["<what the ADR defers or excludes>"],
  "open_questions": ["<questions a human must answer>"]}"#
         }

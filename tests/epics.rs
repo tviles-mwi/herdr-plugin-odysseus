@@ -260,3 +260,48 @@ fn epic_tasks_become_github_issues_with_status_comments() {
     assert_eq!(t[0].issue.as_ref().unwrap().number, 42);
     assert!(herdr_orchestrator::engine::tracker::importable(&h.ctx, &h.repo, "agent-ready").unwrap().is_empty());
 }
+
+#[test]
+fn plan_task_branch_reaches_the_run() {
+    let mut h = setup("stacked");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    h.ctx
+        .store
+        .update_epic("E1", |x| {
+            let p = x.plan.as_mut().unwrap();
+            for t in p.tasks.iter_mut() {
+                t.branch = Some(format!("feat/{}-part", t.key.to_lowercase()));
+            }
+            Ok(())
+        })
+        .unwrap();
+    let e = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap();
+    let t1 = h.ctx.store.load_task(&e.tasks["T1"]).unwrap();
+    assert_eq!(t1.options.branch.as_deref(), Some("feat/t1-part"));
+    let runs = h.settle(&t1.task_id);
+    assert_eq!(runs[0].status, RunStatus::Succeeded, "{:?}", runs[0].status_reason);
+    assert_eq!(runs[0].git.branch.as_deref(), Some("feat/t1-part"));
+}
+
+#[test]
+fn a_taken_plan_branch_refuses_the_whole_accept() {
+    let mut h = setup("stacked");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    h.ctx
+        .store
+        .update_epic("E1", |x| {
+            for t in x.plan.as_mut().unwrap().tasks.iter_mut() {
+                t.branch = Some(format!("feat/{}-part", t.key.to_lowercase()));
+            }
+            Ok(())
+        })
+        .unwrap();
+    git(&h.repo, &["branch", "feat/t3-part"]); // T3's branch is taken
+    let err = epic::accept(&h.ctx, "E1", accept_opts("fake-success", "fake-acceptance-met")).unwrap_err();
+    assert!(format!("{err:#}").contains("T3: branch feat/t3-part already exists"), "{err:#}");
+    let e = h.ctx.store.load_epic("E1").unwrap();
+    assert!(e.tasks.is_empty(), "no task may be created when any chosen branch is refused: {:?}", e.tasks);
+    assert_eq!(e.status, EpicStatus::Proposed);
+}

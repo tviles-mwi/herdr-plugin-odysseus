@@ -180,6 +180,10 @@ pub struct PlanTask {
     /// Paths the task is expected to touch (becomes the task's scope).
     #[serde(default)]
     pub scope: Vec<String>,
+    /// Exact branch name for this task (optional; default: the configured
+    /// prefix + task number + title slug).
+    #[serde(default)]
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -222,6 +226,7 @@ pub fn validate_plan(plan: &Plan, rules: &PlanRules) -> Result<()> {
         errs.push(format!("plan has {} tasks; at most {} are allowed (epic.max_tasks) — merge small tasks", plan.tasks.len(), rules.max_tasks));
     }
     let mut keys = BTreeSet::new();
+    let mut branches = BTreeSet::new();
     for t in &plan.tasks {
         if !valid_key(&t.key) {
             errs.push(format!("task key {:?} must be 1-16 letters, digits, '-' or '_'", t.key));
@@ -253,6 +258,14 @@ pub fn validate_plan(plan: &Plan, rules: &PlanRules) -> Result<()> {
         for g in &t.scope {
             if globset::Glob::new(g).is_err() || g.starts_with('/') || g.contains("..") {
                 errs.push(format!("{}: invalid scope glob {g:?}", t.key));
+            }
+        }
+        if let Some(b) = &t.branch {
+            if !crate::git::branch_name_shape_ok(b) {
+                errs.push(format!("{}: invalid branch {b:?}", t.key));
+            }
+            if !branches.insert(b.clone()) {
+                errs.push(format!("{}: duplicate branch {b:?}", t.key));
             }
         }
     }
@@ -584,5 +597,22 @@ mod tests {
         assert_eq!(a.title, "A");
         assert!(text.contains("Accepted"));
         assert!(load_adr(d.path(), Path::new("/etc/hosts")).is_err());
+    }
+
+    #[test]
+    fn plan_task_branches() {
+        let w = vec!["epic-task".to_string()];
+        let mut a = task("T1", &[]);
+        a["branch"] = "fix/1-a".into();
+        let mut b = task("T2", &[]);
+        b["branch"] = "fix/1-a".into();
+        let dup = serde_json::json!({"tasks": [a.clone(), b]}).to_string();
+        assert!(format!("{:#}", parse_plan(&dup, &rules(&w)).unwrap_err()).contains("duplicate branch"));
+        let mut c = task("T3", &[]);
+        c["branch"] = "bad branch".into();
+        let bad = serde_json::json!({"tasks": [c]}).to_string();
+        assert!(format!("{:#}", parse_plan(&bad, &rules(&w)).unwrap_err()).contains("invalid branch"));
+        let ok = serde_json::json!({"tasks": [a]}).to_string();
+        assert_eq!(parse_plan(&ok, &rules(&w)).unwrap().tasks[0].branch.as_deref(), Some("fix/1-a"));
     }
 }
