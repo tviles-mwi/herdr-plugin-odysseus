@@ -524,6 +524,7 @@ impl<'a> RunDriver<'a> {
                 &self.run.task_id,
                 &self.task.title,
                 variant,
+                self.task.options.branch.as_deref(),
             )?;
             let base_sha = crate::git::rev_parse(&repo, &self.run.git.base_ref)?;
             self.run.git.branch = Some(branch);

@@ -216,6 +216,12 @@ pub fn create_task(ctx: &EngineCtx, nt: NewTask) -> Result<Task> {
     if let Some(b) = &nt.options.base_ref {
         crate::git::rev_parse(&repo, b)?;
     }
+    if let Some(b) = &nt.options.branch {
+        crate::git::validate_branch_name(&repo, b).with_context(|| format!("invalid --branch {b:?}"))?;
+        if crate::git::branch_exists(&repo, b) {
+            bail!("branch {b} already exists; refusing to reuse it (pick another --branch or delete the old one)");
+        }
+    }
     for g in &nt.options.scope {
         globset::Glob::new(g).with_context(|| format!("invalid --scope glob {g:?}"))?;
     }

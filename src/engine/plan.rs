@@ -19,7 +19,7 @@ pub struct PlanLine {
     pub note: Option<String>,
 }
 
-pub fn plan(ctx: &EngineCtx, repo: &Path, task_title: &str, workflow: Option<&str>, runner: Option<&str>, base: Option<&str>, variants: u32) -> Result<Vec<PlanLine>> {
+pub fn plan(ctx: &EngineCtx, repo: &Path, task_title: &str, workflow: Option<&str>, runner: Option<&str>, base: Option<&str>, variants: u32, branch: Option<&str>) -> Result<Vec<PlanLine>> {
     let repo = crate::git::main_repo_root(repo)?;
     let cfg = ctx.load_config(Some(&repo))?;
     let policy = ctx.policy_for(&cfg)?;
@@ -28,7 +28,7 @@ pub fn plan(ctx: &EngineCtx, repo: &Path, task_title: &str, workflow: Option<&st
     let (wf, src) = ctx.catalog(Some(&repo)).workflow(&wf_name)?;
     let base_ref = crate::git::default_base(&repo, base.or(cfg.config.defaults.base_branch.as_deref()))?;
     let base_sha = crate::git::rev_parse(&repo, &base_ref)?;
-    let (path, branch) = crate::git::plan_names(&repo, &cfg.config.git.worktree_root, &cfg.config.git.branch_prefix, "<n>", task_title, None)?;
+    let (path, branch) = crate::git::plan_names(&repo, &cfg.config.git.worktree_root, &cfg.config.git.branch_prefix, "<n>", task_title, None, branch)?;
     let mut out = vec![PlanLine {
         step: None,
         would: format!(

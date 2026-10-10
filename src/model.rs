@@ -192,6 +192,10 @@ pub struct TaskOptions {
     /// human's approval (empty = no scope check).
     #[serde(default)]
     pub scope: Vec<String>,
+    /// Explicit branch name for the run (default: `git.branch_prefix` +
+    /// task number + title slug). Variants append `-v<x>`.
+    #[serde(default)]
+    pub branch: Option<String>,
     /// Extra named checks to run before the review (epic verification).
     #[serde(default)]
     pub extra_checks: Vec<String>,
@@ -226,6 +230,7 @@ impl Default for TaskOptions {
             step_runners: BTreeMap::new(),
             dry_run: false,
             scope: vec![],
+            branch: None,
             extra_checks: vec![],
             extra_commands: vec![],
             continue_run: None,
@@ -875,5 +880,11 @@ mod tests {
             contract: None,
             memory: None,
         }
+    }
+
+    #[test]
+    fn task_options_without_branch_still_deserialize() {
+        let o: TaskOptions = serde_json::from_str("{}").unwrap();
+        assert!(o.branch.is_none());
     }
 }

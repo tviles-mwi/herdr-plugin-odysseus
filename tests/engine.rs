@@ -429,7 +429,7 @@ fn pr_flow_with_fake_gh_and_single_approval() {
 #[test]
 fn dry_run_plan_reports_policy_without_side_effects() {
     let h = Harness::new();
-    let lines = herdr_orchestrator::engine::plan::plan(&h.ctx, &h.repo, "Plan me", Some("implement-review"), None, None, 1).unwrap();
+    let lines = herdr_orchestrator::engine::plan::plan(&h.ctx, &h.repo, "Plan me", Some("implement-review"), None, None, 1, None).unwrap();
     let text = serde_json::to_string(&lines).unwrap();
     assert!(text.contains("create 1 worktree"));
     assert!(text.contains("codex") && text.contains("claude"));

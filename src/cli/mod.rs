@@ -183,6 +183,10 @@ pub struct TaskOpts {
     /// your approval: `--scope 'src/webhooks/**' --scope 'tests/**'`.
     #[arg(long)]
     pub scope: Vec<String>,
+    /// Branch name for the run, e.g. `fix/1742-keep-selection` (default:
+    /// git.branch_prefix + task number + title slug).
+    #[arg(long)]
+    pub branch: Option<String>,
 }
 
 fn parse_kv(s: &str) -> Result<(String, String), String> {
@@ -714,6 +718,7 @@ fn task_options(o: &TaskOpts, dry_run: bool) -> TaskOptions {
         step_runners: o.step_runner.iter().cloned().collect::<BTreeMap<_, _>>(),
         dry_run,
         scope: o.scope.clone(),
+        branch: o.branch.clone(),
         ..Default::default()
     }
 }
@@ -837,7 +842,7 @@ fn plan_cmd(app: &App, text: &str, o: &TaskOpts) -> Result<i32> {
     let ctx = app.ctx(true)?;
     let repo = app.repo()?;
     let title = text.lines().next().unwrap_or("task");
-    let lines = engine::plan::plan(&ctx, &repo, title, o.workflow.as_deref(), o.runner.as_deref(), o.base.as_deref(), o.variants)?;
+    let lines = engine::plan::plan(&ctx, &repo, title, o.workflow.as_deref(), o.runner.as_deref(), o.base.as_deref(), o.variants, o.branch.as_deref())?;
     if app.cli_json {
         app.print_json(&lines)?;
     } else {

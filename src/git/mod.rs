@@ -106,16 +106,21 @@ pub fn validate_branch_prefix(prefix: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validate a branch name with our own conservative rules plus
-/// `git check-ref-format --branch`.
-pub fn validate_branch_name(repo: &Path, name: &str) -> Result<()> {
-    if name.is_empty()
+/// Our conservative branch-name rules, without asking git (usable where no
+/// repository is at hand, e.g. plan validation).
+pub fn branch_name_shape_ok(name: &str) -> bool {
+    !(name.is_empty()
         || name.starts_with('-')
         || name.contains("..")
         || name.ends_with('/')
         || name.ends_with(".lock")
-        || !name.chars().all(|c| c.is_ascii_alphanumeric() || "-_/.".contains(c))
-    {
+        || !name.chars().all(|c| c.is_ascii_alphanumeric() || "-_/.".contains(c)))
+}
+
+/// Validate a branch name with our own conservative rules plus
+/// `git check-ref-format --branch`.
+pub fn validate_branch_name(repo: &Path, name: &str) -> Result<()> {
+    if !branch_name_shape_ok(name) {
         bail!("invalid branch name {name:?}");
     }
     git(repo, &["check-ref-format", "--branch", name]).map(|_| ())
@@ -506,7 +511,8 @@ pub fn git_version() -> Result<String> {
     Ok(run_tool(&["git", "--version"], Path::new("."), Duration::from_secs(10))?.trim().to_string())
 }
 
-/// Paths for a run's worktree and branch.
+/// Paths for a run's worktree and branch. An explicit branch wins over
+/// `branch_prefix` + task number + title slug; variants append `-v<x>`.
 pub fn plan_names(
     repo: &Path,
     worktree_root: &str,
@@ -514,14 +520,20 @@ pub fn plan_names(
     task_id: &str,
     title: &str,
     variant: Option<char>,
+    explicit_branch: Option<&str>,
 ) -> Result<(PathBuf, String)> {
-    let slug = slugify(title, 40);
     let suffix = variant.map(|c| format!("-v{}", c.to_ascii_lowercase())).unwrap_or_default();
-    let leaf = format!("{task_id}-{slug}{suffix}");
+    let (leaf, branch) = match explicit_branch {
+        Some(b) => (format!("{task_id}-{}{suffix}", slugify(b, 40)), format!("{b}{suffix}")),
+        None => {
+            let leaf = format!("{task_id}-{}{suffix}", slugify(title, 40));
+            let branch = format!("{branch_prefix}{leaf}");
+            (leaf, branch)
+        }
+    };
     let root = Path::new(worktree_root);
     let base = if root.is_absolute() { root.to_path_buf() } else { repo.join(root) };
     let path = base.join(&leaf);
-    let branch = format!("{branch_prefix}{leaf}");
     if !crate::security::paths::normalize_lexically(&path).starts_with(crate::security::paths::normalize_lexically(&base)) {
         return Err(anyhow!("worktree path escapes worktree root"));
     }
@@ -580,7 +592,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let repo = init_repo(d.path());
         let base = rev_parse(&repo, "main").unwrap();
-        let (path, branch) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "5", "Do thing", None).unwrap();
+        let (path, branch) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "5", "Do thing", None, None).unwrap();
         assert_eq!(branch, "herdr/5-do-thing");
         assert!(ensure_excluded(&repo).unwrap());
         assert!(!ensure_excluded(&repo).unwrap());
@@ -609,7 +621,7 @@ mod tests {
         let tracked = git(&path, &["ls-files"]).unwrap();
         assert!(!tracked.contains(ORCH_DIR));
         // Branch collision refused.
-        let (p2, _) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "6", "x", None).unwrap();
+        let (p2, _) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "6", "x", None, None).unwrap();
         assert!(add_worktree(&repo, &p2, &branch, &base).is_err());
         assert_eq!(main_repo_root(&path).unwrap(), repo);
     }
@@ -636,5 +648,26 @@ mod tests {
         assert_eq!(v, vec![(1, 2, "a.txt".into()), (0, 0, "bin.png".into())]);
         let v = parse_numstat_z("3\t0\t\0old.txt\0new.txt\0");
         assert_eq!(v, vec![(3, 0, "new.txt".into())]);
+    }
+
+    #[test]
+    fn explicit_branch_names() {
+        let d = tempfile::tempdir().unwrap();
+        let repo = init_repo(d.path());
+        let (p, b) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "5", "Do thing", None, Some("fix/1742-keep-selection")).unwrap();
+        assert_eq!(b, "fix/1742-keep-selection");
+        assert!(p.ends_with("5-fix-1742-keep-selection"), "{}", p.display());
+        let (_, bv) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "5", "Do thing", Some('B'), Some("fix/1742-x")).unwrap();
+        assert_eq!(bv, "fix/1742-x-vb");
+        let (_, bd) = plan_names(&repo, ".herdr-orchestrator/worktrees", "herdr/", "5", "Do thing", None, None).unwrap();
+        assert_eq!(bd, "herdr/5-do-thing");
+    }
+
+    #[test]
+    fn branch_shape() {
+        assert!(branch_name_shape_ok("feat/1742-x"));
+        for bad in ["", "-x", "a..b", "a b", "x.lock", "a/", "a:b"] {
+            assert!(!branch_name_shape_ok(bad), "{bad}");
+        }
     }
 }
