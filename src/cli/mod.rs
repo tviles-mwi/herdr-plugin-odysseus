@@ -256,6 +256,7 @@ pub enum NoteCmd {
 }
 
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)] // parsed once per CLI invocation
 pub enum TrackerCmd {
     /// Create issues (and a milestone per epic) for accepted epic tasks and
     /// post status changes as comments.

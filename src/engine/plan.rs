@@ -19,6 +19,7 @@ pub struct PlanLine {
     pub note: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn plan(ctx: &EngineCtx, repo: &Path, task_title: &str, workflow: Option<&str>, runner: Option<&str>, base: Option<&str>, variants: u32, branch: Option<&str>) -> Result<Vec<PlanLine>> {
     let repo = crate::git::main_repo_root(repo)?;
     let cfg = ctx.load_config(Some(&repo))?;
