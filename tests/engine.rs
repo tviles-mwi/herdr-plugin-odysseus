@@ -1026,6 +1026,22 @@ fn pr_feedback_becomes_a_follow_up_on_the_same_branch() {
 }
 
 #[test]
+fn followup_workflow_config_picks_the_follow_up_workflow() {
+    let (mut h, _remote) = pr_harness();
+    h.workflow("fu", "  - id: implement\n    type: agent\n    prompt: \"{{task}}\"\n");
+    h.project_file("config.yaml", "github:\n  followup_workflow: fu\n");
+    let t = h.task("Open a PR", "pr", Some("fake-success"));
+    h.wait_status(&t.task_id, RunStatus::AwaitingApproval);
+    let r0 = h.runs_of(&t.task_id)[0].clone();
+    h.decide(&r0.run_id, true);
+    let r = h.settle(&t.task_id)[0].clone();
+    assert_eq!(r.status, RunStatus::Succeeded, "{:?}", r.status_reason);
+    std::fs::write(h.dir.path().join("gh-view.json"), r#"{"state":"OPEN","statusCheckRollup":[{"name":"test","conclusion":"FAILURE","detailsUrl":"https://ci/1"}],"reviews":[],"comments":[]}"#).unwrap();
+    let ft = herdr_orchestrator::engine::followup::pr_followup(&h.ctx, &r.run_id, None, None, "test").unwrap();
+    assert_eq!(ft.options.workflow.as_deref(), Some("fu"), "github.followup_workflow wins over the original run's workflow");
+}
+
+#[test]
 fn gc_removes_only_clean_merged_worktrees_and_stats_summarize() {
     let mut h = Harness::new();
     let t1 = h.task("Merged later", "quick-task", Some("fake-success"));

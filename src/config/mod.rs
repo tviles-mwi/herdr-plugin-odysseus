@@ -213,6 +213,9 @@ pub struct GithubConfig {
     /// and review comments and notify (never starts anything by itself).
     pub watch_prs: bool,
     pub watch_interval: HumanDuration,
+    /// Workflow for PR follow-ups (`run followup`, the dashboard's follow-up
+    /// key). Default: the original run's workflow.
+    pub followup_workflow: Option<String>,
     /// Issues, milestones and a Projects board for epics and tasks.
     pub tracker: TrackerConfig,
 }
@@ -238,7 +241,7 @@ impl Default for TrackerConfig {
 
 impl Default for GithubConfig {
     fn default() -> Self {
-        Self { draft_pr: true, auto_merge: false, base: None, push_before_pr: true, watch_prs: false, watch_interval: HumanDuration::from_secs(10 * 60), tracker: Default::default() }
+        Self { draft_pr: true, auto_merge: false, base: None, push_before_pr: true, watch_prs: false, watch_interval: HumanDuration::from_secs(10 * 60), followup_workflow: None, tracker: Default::default() }
     }
 }
 

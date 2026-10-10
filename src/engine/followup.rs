@@ -17,6 +17,7 @@ pub fn pr_followup(ctx: &EngineCtx, run_ref: &str, extra: Option<String>, runner
     }
     let url = run.pr_url.clone().context("this run has no pull request")?;
     let task = ctx.store.load_task(&run.task_id)?;
+    let workflow = ctx.load_config(Some(&run.repo_root))?.config.github.followup_workflow.clone().unwrap_or_else(|| run.workflow_name.clone());
     // One follow-up at a time: they share the branch and the worktree.
     if let Some(open) = ctx.store.list_tasks()?.into_iter().find(|t| !t.status.is_terminal() && t.options.continue_run.as_deref() == Some(run.run_id.as_str())) {
         bail!("follow-up #{} of {} is still {}", open.task_id, run.display_name(), open.status.as_str());
@@ -49,7 +50,7 @@ pub fn pr_followup(ctx: &EngineCtx, run_ref: &str, extra: Option<String>, runner
             repo: run.repo_root.clone(),
             // Same agents as the original task unless told otherwise.
             options: TaskOptions {
-                workflow: Some(run.workflow_name.clone()),
+                workflow: Some(workflow),
                 continue_run: Some(run.run_id.clone()),
                 scope: task.options.scope.clone(),
                 runner: runner.or_else(|| run.runner_override.clone()),

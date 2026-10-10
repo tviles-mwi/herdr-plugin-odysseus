@@ -226,6 +226,14 @@
         "push_before_pr": {
           "type": "boolean"
         },
+        "followup_workflow": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Workflow for PR follow-ups (run followup, the dashboard's follow-up key). Default: the original run's workflow."
+        },
         "watch_prs": {
           "type": "boolean",
           "default": false,

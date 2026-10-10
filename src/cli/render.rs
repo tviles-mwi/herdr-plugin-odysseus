@@ -349,6 +349,7 @@ github:
   auto_merge: false
   # Notify about failing CI / review comments on open PRs (then `run followup`).
   # watch_prs: false
+  # followup_workflow: my-followup   # default: the original run's workflow
   # Issues + milestones for epics (`tracker sync`), import of labelled issues.
   # tracker:
   #   import_label: agent-ready
