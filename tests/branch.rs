@@ -42,4 +42,12 @@ fn invalid_or_existing_branch_is_refused_at_create() {
     let out = std::process::Command::new("git").args(["branch", "fix/taken"]).current_dir(&h.repo).output().unwrap();
     assert!(out.status.success());
     assert!(format!("{:#}", mk("fix/taken").unwrap_err()).contains("already exists"));
+    // Taken on a remote only (local branch deleted after its PR merged): still refused,
+    // or a re-run would push onto the old branch and record its old PR.
+    let out = std::process::Command::new("git").args(["remote", "add", "origin", "https://example.invalid/r.git"]).current_dir(&h.repo).output().unwrap();
+    assert!(out.status.success());
+    let out = std::process::Command::new("git").args(["update-ref", "refs/remotes/origin/fix/remote-taken", "HEAD"]).current_dir(&h.repo).output().unwrap();
+    assert!(out.status.success());
+    let e = format!("{:#}", mk("fix/remote-taken").unwrap_err());
+    assert!(e.contains("already exists on origin"), "{e}");
 }

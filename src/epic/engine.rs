@@ -309,6 +309,9 @@ pub fn accept(ctx: &EngineCtx, epic_id: &str, o: AcceptOptions) -> Result<Epic> 
             if crate::git::branch_exists(&e.repo_root, b) {
                 bail!("{}: branch {b} already exists; change it (epic edit) or delete the old branch", t.key);
             }
+            if let Some(r) = crate::git::remote_with_branch(&e.repo_root, b) {
+                bail!("{}: branch {b} already exists on {r}; change it (epic edit)", t.key);
+            }
         }
     }
     let mut created: BTreeMap<String, String> = BTreeMap::new();

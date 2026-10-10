@@ -130,6 +130,13 @@ pub fn branch_exists(repo: &Path, branch: &str) -> bool {
     git(repo, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_ok()
 }
 
+/// The first remote whose remote-tracking refs hold `branch`, if any. A branch
+/// deleted locally after its PR merged still exists there, with its old PR.
+pub fn remote_with_branch(repo: &Path, branch: &str) -> Option<String> {
+    let remotes = git(repo, &["remote"]).ok()?;
+    remotes.lines().map(str::trim).filter(|r| !r.is_empty()).find(|r| git(repo, &["show-ref", "--verify", "--quiet", &format!("refs/remotes/{r}/{branch}")]).is_ok()).map(String::from)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorktreeEntry {
     pub path: PathBuf,

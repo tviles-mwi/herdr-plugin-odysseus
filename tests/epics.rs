@@ -329,3 +329,23 @@ fn task_title_prefix_defaults_to_on() {
     let e = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap();
     assert_eq!(h.ctx.store.load_task(&e.tasks["T1"]).unwrap().title, "[E1/T1] Part T1");
 }
+
+#[test]
+fn a_plan_branch_taken_on_a_remote_refuses_the_accept() {
+    let mut h = setup("stacked");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    h.ctx
+        .store
+        .update_epic("E1", |x| {
+            for t in x.plan.as_mut().unwrap().tasks.iter_mut() {
+                t.branch = Some(format!("feat/{}-part", t.key.to_lowercase()));
+            }
+            Ok(())
+        })
+        .unwrap();
+    git(&h.repo, &["remote", "add", "origin", "https://example.invalid/r.git"]);
+    git(&h.repo, &["update-ref", "refs/remotes/origin/feat/t1-part", "HEAD"]); // merged and deleted locally
+    let err = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap_err();
+    assert!(format!("{err:#}").contains("T1: branch feat/t1-part already exists on origin"), "{err:#}");
+}

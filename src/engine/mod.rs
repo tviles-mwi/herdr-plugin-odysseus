@@ -221,6 +221,9 @@ pub fn create_task(ctx: &EngineCtx, nt: NewTask) -> Result<Task> {
         if crate::git::branch_exists(&repo, b) {
             bail!("branch {b} already exists; refusing to reuse it (pick another --branch or delete the old one)");
         }
+        if let Some(r) = crate::git::remote_with_branch(&repo, b) {
+            bail!("branch {b} already exists on {r}; refusing to reuse it (its old pull request would be recorded as this run's): pick another --branch");
+        }
     }
     for g in &nt.options.scope {
         globset::Glob::new(g).with_context(|| format!("invalid --scope glob {g:?}"))?;
