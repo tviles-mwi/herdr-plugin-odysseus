@@ -18,6 +18,14 @@ pub fn pr_followup(ctx: &EngineCtx, run_ref: &str, extra: Option<String>, runner
     let url = run.pr_url.clone().context("this run has no pull request")?;
     let task = ctx.store.load_task(&run.task_id)?;
     let workflow = ctx.load_config(Some(&run.repo_root))?.config.github.followup_workflow.clone().unwrap_or_else(|| run.workflow_name.clone());
+    // A different follow-up workflow keeps only the overrides that name its own
+    // steps (an override for a step it lacks would refuse the follow-up).
+    let step_runners = if workflow == run.workflow_name {
+        run.step_runners.clone()
+    } else {
+        let (wf, _) = ctx.catalog(Some(&run.repo_root)).workflow(&workflow)?;
+        run.step_runners.iter().filter(|(k, _)| wf.steps.iter().any(|s| &s.id == *k)).map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
     // One follow-up at a time: they share the branch and the worktree.
     if let Some(open) = ctx.store.list_tasks()?.into_iter().find(|t| !t.status.is_terminal() && t.options.continue_run.as_deref() == Some(run.run_id.as_str())) {
         bail!("follow-up #{} of {} is still {}", open.task_id, run.display_name(), open.status.as_str());
@@ -54,7 +62,7 @@ pub fn pr_followup(ctx: &EngineCtx, run_ref: &str, extra: Option<String>, runner
                 continue_run: Some(run.run_id.clone()),
                 scope: task.options.scope.clone(),
                 runner: runner.or_else(|| run.runner_override.clone()),
-                step_runners: run.step_runners.clone(),
+                step_runners,
                 ..Default::default()
             },
             via: via.into(),
