@@ -331,7 +331,7 @@ pub fn accept(ctx: &EngineCtx, epic_id: &str, o: AcceptOptions) -> Result<Epic> 
             ctx,
             NewTask {
                 text,
-                title: Some(format!("[{}/{}] {}", e.epic_id, t.key, t.title)),
+                title: Some(if cfg.config.epic.task_title_prefix { format!("[{}/{}] {}", e.epic_id, t.key, t.title) } else { t.title.clone() }),
                 repo: e.repo_root.clone(),
                 options,
                 via: o.via.clone(),

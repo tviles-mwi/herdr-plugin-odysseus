@@ -305,3 +305,23 @@ fn a_taken_plan_branch_refuses_the_whole_accept() {
     assert!(e.tasks.is_empty(), "no task may be created when any chosen branch is refused: {:?}", e.tasks);
     assert_eq!(e.status, EpicStatus::Proposed);
 }
+
+#[test]
+fn task_title_prefix_false_keeps_the_plan_title() {
+    let mut h = setup("stacked");
+    h.project_file("config.yaml", "epic:\n  task_workflow: acc-only\n  dependency_mode: stacked\n  task_title_prefix: false\n");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    let e = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap();
+    let t1 = h.ctx.store.load_task(&e.tasks["T1"]).unwrap();
+    assert_eq!(t1.title, "Part T1");
+}
+
+#[test]
+fn task_title_prefix_defaults_to_on() {
+    let mut h = setup("stacked");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    let e = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap();
+    assert_eq!(h.ctx.store.load_task(&e.tasks["T1"]).unwrap().title, "[E1/T1] Part T1");
+}

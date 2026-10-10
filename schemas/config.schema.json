@@ -595,6 +595,11 @@
           ],
           "default": "merged",
           "description": "merged: a dependency counts when its commits are in the base branch (local check). stacked: branch from the one unmerged dependency."
+        },
+        "task_title_prefix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefix accepted tasks' titles with \"[E<n>/<key>] \" (default true). false keeps the plan task's title as-is."
         }
       }
     },

@@ -384,6 +384,7 @@ epic:
   # merged: a dependency counts once merged into the base branch (pull first).
   # stacked: branch from the dependency's branch; its PR targets that branch.
   dependency_mode: merged
+  task_title_prefix: true
 
 # Child processes get only these variables (plus HERDR_ORCH_*).
 environment:

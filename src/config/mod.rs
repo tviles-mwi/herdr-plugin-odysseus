@@ -407,6 +407,10 @@ pub struct EpicConfig {
     /// Workflow for accepted tasks that do not name one.
     pub task_workflow: String,
     pub dependency_mode: DependencyMode,
+    /// Prefix accepted tasks' titles with "[E<n>/<key>] ". `false` keeps the
+    /// plan task's title as-is (e.g. a conventional-commit subject, so
+    /// `git.commit_message: "{{task_title}}"` stays conventional).
+    pub task_title_prefix: bool,
 }
 
 impl Default for EpicConfig {
@@ -417,6 +421,7 @@ impl Default for EpicConfig {
             planner_runner: None,
             task_workflow: "epic-task".into(),
             dependency_mode: DependencyMode::Merged,
+            task_title_prefix: true,
         }
     }
 }
