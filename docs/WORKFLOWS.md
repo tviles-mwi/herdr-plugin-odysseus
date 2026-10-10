@@ -551,13 +551,16 @@ herdr-orchestrator epic verify E1                             # conformance revi
   `workflow` and `risk`; plus `out_of_scope` and `open_questions`.
   Validation: unique keys, known dependencies, no cycles, at most
   `epic.max_tasks` (default 12), known workflow and check names, commands
-  without templates. A plan is never partly accepted.
+  without templates. A plan is never partly accepted. A task may name its
+  exact branch (`branch`); invalid or duplicate names fail validation.
 - **Accepting** creates tasks in dependency order with the plan's scope
   (`task-scope` approval for changes outside it), acceptance criteria,
   manual checks and extra checks; runner options apply to all of them.
   Accepting is how you approve the plan's commands; they are still
   policy-checked when they run. Dependencies of an accepted key must be
   accepted too.
+- **Titles**: accepted tasks are titled `[E1/T1] <title>` unless
+  `epic.task_title_prefix: false`, which keeps the plan title as-is.
 - **Dependencies** (`epic.dependency_mode`): `merged` waits until the
   dependency's commits are in the base branch (local check; merge the PR
   and update the local branch). `stacked` branches from the single unmerged

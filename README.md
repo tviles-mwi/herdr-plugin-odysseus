@@ -377,6 +377,7 @@ herdr-orchestrator policy check --command "git push -f origin main"   # DENY, ex
 herdr-orchestrator audit verify --all
 herdr-orchestrator usage [--task 12]                               # tokens per task
 herdr-orchestrator task create "Fix webhooks" --scope 'src/webhooks/**'   # ask about anything else
+herdr-orchestrator task create "Fix webhooks" --branch fix/42-webhooks      # explicit branch name
 herdr-orchestrator adr list | epic create --from docs/adr/0007-x.md | epic show E1
 herdr-orchestrator epic accept E1 --only T1,T2 | epic reject | epic replan | epic edit | epic verify
 herdr-orchestrator task unblock 14                                 # start despite dependencies

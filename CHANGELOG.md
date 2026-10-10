@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- **`--branch` on `task create` (and `plan`, `tracker import`)**: name the run's branch exactly, e.g. `fix/1742-keep-selection`, instead of `git.branch_prefix` + task number + title slug. Variants append `-v<x>`. Validated with `git check-ref-format`; an existing branch is refused when the task is created.
+- **`branch` on epic plan tasks**: carried into the accepted task. Duplicate or invalid names fail plan validation.
+- **`epic.task_title_prefix`** (default `true`): `false` keeps the plan task's title as-is instead of `[E1/T1] <title>`, so `git.commit_message: "{{task_title}}"` can produce conventional commits.
+
 ### Fixed
 - **`repos:` now scopes file rules.** The run's repository root was set only on worktree-creation and command subjects, so a rule combining `paths` (or `added_lines`) with `repos` never matched at the diff gate, in the Claude `PreToolUse` hook, on commits or on PR creation. Every run subject now carries it, and `policy check` fills it from `--repo` / the Herdr context / the cwd.
 
