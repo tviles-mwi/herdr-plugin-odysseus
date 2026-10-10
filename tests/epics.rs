@@ -300,6 +300,10 @@ fn a_taken_plan_branch_refuses_the_whole_accept() {
         .unwrap();
     git(&h.repo, &["branch", "feat/t3-part"]); // T3's branch is taken
     let err = epic::accept(&h.ctx, "E1", accept_opts("fake-success", "fake-acceptance-met")).unwrap_err();
+    // No task may exist anywhere in the store, not just in epic.tasks (which is
+    // only written after the create loop): T1 and T2 come first in topo order.
+    let queued: Vec<String> = h.ctx.store.list_tasks().unwrap().into_iter().filter(|t| t.epic.as_ref().is_some_and(|l| ["T1", "T2", "T3"].contains(&l.key.as_str()))).map(|t| t.title).collect();
+    assert!(queued.is_empty(), "plan tasks were queued before the refusal: {queued:?} ({err:#})");
     assert!(format!("{err:#}").contains("T3: branch feat/t3-part already exists"), "{err:#}");
     let e = h.ctx.store.load_epic("E1").unwrap();
     assert!(e.tasks.is_empty(), "no task may be created when any chosen branch is refused: {:?}", e.tasks);
