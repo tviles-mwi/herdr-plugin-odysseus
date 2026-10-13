@@ -6,6 +6,7 @@
 - **`--branch` on `task create` (and `plan`, `tracker import`)**: name the run's branch exactly, e.g. `fix/1742-keep-selection`, instead of `git.branch_prefix` + task number + title slug. Variants append `-v<x>`. Validated with `git check-ref-format`; a branch that already exists locally or on a remote is refused when the task is created (a re-run must never push onto an old branch and record its old PR).
 - **`branch` on epic plan tasks**: carried into the accepted task. Duplicate or invalid names fail plan validation.
 - **`epic.task_title_prefix`** (default `true`): `false` keeps the plan task's title as-is instead of `[E1/T1] <title>`, so `git.commit_message: "{{task_title}}"` can produce conventional commits.
+- **`epic.plan_verification`** (default `true`): `false` never splices a plan task's `verification` checks/commands into its runs (manual checks still reach the task), for workflows that own every gate.
 - **`github.followup_workflow`** (default: the original run's workflow): the workflow PR follow-ups use (`run followup`, the dashboard's follow-up key), e.g. a lean push-and-fix-CI workflow instead of the full original pipeline.
 
 ### Fixed

@@ -414,6 +414,10 @@ pub struct EpicConfig {
     /// plan task's title as-is (e.g. a conventional-commit subject, so
     /// `git.commit_message: "{{task_title}}"` stays conventional).
     pub task_title_prefix: bool,
+    /// Splice an accepted plan task's `verification` checks/commands into its
+    /// runs as extra gate steps. `false` ignores them (manual checks still
+    /// reach the task): for workflows that own every gate themselves.
+    pub plan_verification: bool,
 }
 
 impl Default for EpicConfig {
@@ -425,6 +429,7 @@ impl Default for EpicConfig {
             task_workflow: "epic-task".into(),
             dependency_mode: DependencyMode::Merged,
             task_title_prefix: true,
+            plan_verification: true,
         }
     }
 }

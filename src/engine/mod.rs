@@ -291,8 +291,11 @@ pub fn create_runs(ctx: &EngineCtx, task: &Task) -> Result<Vec<Run>> {
     let cfg = ctx.load_config(Some(&task.repo_root))?;
     let wf_name = task.options.workflow.clone().unwrap_or_else(|| cfg.config.defaults.workflow.clone());
     let (wf, mut src) = ctx.catalog(Some(&task.repo_root)).workflow(&wf_name)?;
-    // Verification the human accepted with an epic plan: extra check steps.
-    let wf = match augment_with_checks(&wf, &task.options.extra_checks, &task.options.extra_commands)? {
+    // Verification the human accepted with an epic plan: extra check steps
+    // (unless epic.plan_verification is off: the workflow owns every gate).
+    let (checks, commands): (&[String], &[Vec<String>]) =
+        if cfg.config.epic.plan_verification { (&task.options.extra_checks, &task.options.extra_commands) } else { (&[], &[]) };
+    let wf = match augment_with_checks(&wf, checks, commands)? {
         Some(w) => {
             src.yaml = format!("# {} + verification from the accepted plan\n{}", wf.name, serde_yaml_ng::to_string(&w)?);
             Workflow::parse(&src.yaml).context("augmented workflow is invalid")?

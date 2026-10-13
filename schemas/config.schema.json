@@ -608,6 +608,11 @@
           "type": "boolean",
           "default": true,
           "description": "Prefix accepted tasks' titles with \"[E<n>/<key>] \" (default true). false keeps the plan task's title as-is."
+        },
+        "plan_verification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Splice an accepted plan task's verification checks/commands into its runs as extra gate steps (default true). false ignores them; manual checks still reach the task."
         }
       }
     },

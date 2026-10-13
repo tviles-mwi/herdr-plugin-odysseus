@@ -386,6 +386,7 @@ epic:
   # stacked: branch from the dependency's branch; its PR targets that branch.
   dependency_mode: merged
   task_title_prefix: true
+  plan_verification: true
 
 # Child processes get only these variables (plus HERDR_ORCH_*).
 environment:

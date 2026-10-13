@@ -349,3 +349,18 @@ fn a_plan_branch_taken_on_a_remote_refuses_the_accept() {
     let err = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap_err();
     assert!(format!("{err:#}").contains("T1: branch feat/t1-part already exists on origin"), "{err:#}");
 }
+
+#[test]
+fn plan_verification_false_never_splices_plan_checks() {
+    let mut h = setup("stacked");
+    h.project_file("config.yaml", "epic:\n  task_workflow: acc-only\n  dependency_mode: stacked\n  plan_verification: false\n");
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(&mut h, "E1", EpicStatus::Proposed);
+    let e = epic::accept(&h.ctx, "E1", AcceptOptions { only: Some(vec!["T1".into()]), ..accept_opts("fake-success", "fake-acceptance-met") }).unwrap();
+    let t1 = h.ctx.store.load_task(&e.tasks["T1"]).unwrap();
+    let runs = h.settle(&t1.task_id);
+    assert_eq!(runs[0].status, RunStatus::Succeeded, "{:?}", runs[0].status_reason);
+    assert!(!runs[0].steps.iter().any(|s| s.step_id.starts_with("plan-")), "{:?}", runs[0].steps.iter().map(|s| &s.step_id).collect::<Vec<_>>());
+    assert!(!runs[0].workflow_yaml.contains("verification from the accepted plan"));
+    assert_eq!(t1.manual_checks, vec!["look at part T1".to_string()], "manual checks still reach the task");
+}
