@@ -546,7 +546,8 @@ pub fn dependency_state(ctx: &EngineCtx, task: &Task) -> Result<DepState> {
     let cfg = ctx.load_config(Some(&task.repo_root))?;
     let mode = cfg.config.epic.dependency_mode;
     let base = crate::git::default_base(&task.repo_root, task.options.base_ref.as_deref().or(cfg.config.defaults.base_branch.as_deref()))?;
-    let mut unmerged: Vec<(String, String)> = vec![];
+    // (dependency task id, branch, head) of every dependency not merged yet.
+    let mut unmerged: Vec<(String, String, Option<String>)> = vec![];
     for dep_id in &task.depends_on {
         let dep = ctx.store.load_task(dep_id).with_context(|| format!("dependency #{dep_id}"))?;
         match dep.status {
@@ -574,21 +575,41 @@ pub fn dependency_state(ctx: &EngineCtx, task: &Task) -> Result<DepState> {
             }
         }
         if !merged {
-            unmerged.push((dep_id.clone(), run.git.branch.clone().unwrap_or_default()));
+            unmerged.push((dep_id.clone(), run.git.branch.clone().unwrap_or_default(), head));
         }
     }
     match (mode, unmerged.len()) {
         (_, 0) => Ok(DepState::Ready(None)),
         (DependencyMode::Merged, _) => Ok(DepState::Waiting(format!(
             "waiting for {} to be merged into {} (merge the PR and update the local branch, or `task unblock`)",
-            unmerged.iter().map(|(id, _)| format!("#{id}")).collect::<Vec<_>>().join(", "),
+            unmerged.iter().map(|(id, _, _)| format!("#{id}")).collect::<Vec<_>>().join(", "),
             task.options.base_ref.clone().or(cfg.config.defaults.base_branch.clone()).unwrap_or_else(|| "the base branch".into())
         ))),
         (DependencyMode::Stacked, 1) => Ok(DepState::Ready(Some(unmerged[0].1.clone()))),
-        (DependencyMode::Stacked, _) => Ok(DepState::Waiting(format!(
-            "stacked mode can build on one unmerged branch, but {} are unmerged; merge all but one",
-            unmerged.iter().map(|(id, _)| format!("#{id}")).collect::<Vec<_>>().join(", ")
-        ))),
+        (DependencyMode::Stacked, _) => match cfg.config.epic.stack_through_chains.then(|| chain_tip(&task.repo_root, &unmerged)).flatten() {
+            Some(tip) => Ok(DepState::Ready(Some(tip))),
+            None => Ok(DepState::Waiting(format!(
+                "stacked mode can build on one unmerged branch, but {} are unmerged; merge all but one",
+                unmerged.iter().map(|(id, _, _)| format!("#{id}")).collect::<Vec<_>>().join(", ")
+            ))),
+        },
+    }
+}
+
+/// `epic.stack_through_chains`: the branch of the one unmerged dependency
+/// whose head contains every other unmerged dependency's head, if exactly
+/// one does (the dependencies lie on one chain and it is the tip).
+fn chain_tip(repo: &Path, unmerged: &[(String, String, Option<String>)]) -> Option<String> {
+    let tips: Vec<&(String, String, Option<String>)> = unmerged
+        .iter()
+        .filter(|(id, branch, head)| {
+            let Some(head) = head else { return false };
+            !branch.is_empty() && unmerged.iter().filter(|(o, _, _)| o != id).all(|(_, _, oh)| oh.as_deref().is_some_and(|oh| crate::git::is_ancestor(repo, oh, head)))
+        })
+        .collect();
+    match tips.as_slice() {
+        [(_, branch, _)] => Some(branch.clone()),
+        _ => None,
     }
 }
 

@@ -618,6 +618,11 @@
           "type": "boolean",
           "default": false,
           "description": "Count a dependency as merged when its run's PR is merged on GitHub even if its head is not an ancestor of the base (squash/rebase merges); the base's remote branch is fetched before the dependent starts. GitHub is asked at most once a minute per dependency; a gh error keeps the dependent waiting."
+        },
+        "stack_through_chains": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stacked mode with 2+ unmerged dependencies: when exactly one of them contains every other one's head (they lie on one chain), stack on its branch instead of waiting for merges."
         }
       }
     },

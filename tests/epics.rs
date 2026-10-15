@@ -491,3 +491,44 @@ fn without_merged_by_pr_a_squash_merged_dependency_strands_the_dependent() {
     assert!(why.contains("merged"), "{why}");
     assert!(!std::fs::read_to_string(h.dir.path().join("gh.log")).unwrap_or_default().contains("pr view"), "gh is not asked when the option is off");
 }
+
+const CHAINS: &str = "epic:\n  task_workflow: acc-only\n  dependency_mode: stacked\n  stack_through_chains: true\n";
+
+/// Settle the prerequisites, then return C's task id.
+fn c_after(h: &mut Harness, config: &str, b_deps: &[&str]) -> (herdr_orchestrator::epic::Epic, String) {
+    epic_with_plan(h, config, &[("A", &[]), ("B", b_deps), ("C", &["A", "B"])]);
+    let e = accept_keys(h, &["A", "B", "C"], None);
+    for k in ["A", "B"] {
+        let r = h.settle(&e.tasks[k]).remove(0);
+        assert_eq!(r.status, RunStatus::Succeeded, "{k}: {:?}", r.status_reason);
+    }
+    let c = e.tasks["C"].clone();
+    (e, c)
+}
+
+#[test]
+fn stack_through_chains_stacks_on_the_tip_of_a_chain() {
+    let mut h = setup("stacked");
+    let (e, c) = c_after(&mut h, CHAINS, &["A"]);
+    let (ra, rb) = (h.runs_of(&e.tasks["A"]).remove(0), h.runs_of(&e.tasks["B"]).remove(0));
+    assert_eq!(rb.git.base_ref, ra.git.branch.clone().unwrap(), "B is stacked on A");
+    let rc = h.settle(&c).remove(0);
+    assert_eq!(rc.status, RunStatus::Succeeded, "{:?}", rc.status_reason);
+    assert_eq!(rc.git.base_ref, rb.git.branch.clone().unwrap(), "C stacks on B, whose branch contains A");
+}
+
+#[test]
+fn stack_through_chains_still_waits_for_two_separate_branches() {
+    let mut h = setup("stacked");
+    let (_e, c) = c_after(&mut h, CHAINS, &[]);
+    let why = still_waiting(&mut h, &c);
+    assert!(why.contains("merge all but one"), "{why}");
+}
+
+#[test]
+fn without_stack_through_chains_a_chain_waits() {
+    let mut h = setup("stacked");
+    let (_e, c) = c_after(&mut h, "epic:\n  task_workflow: acc-only\n  dependency_mode: stacked\n", &["A"]);
+    let why = still_waiting(&mut h, &c);
+    assert!(why.contains("merge all but one"), "{why}");
+}

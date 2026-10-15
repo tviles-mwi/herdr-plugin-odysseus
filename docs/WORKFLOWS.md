@@ -571,6 +571,10 @@ herdr-orchestrator epic verify E1                             # conformance revi
   PR is merged on GitHub (squash and rebase merges never make the head an
   ancestor of the base); the base's remote branch is fetched first, and
   `gh` is asked at most once a minute per dependency.
+  `epic.stack_through_chains: true` (stacked mode) lets a task with several
+  unmerged dependencies start when they lie on one chain: it stacks on the
+  one whose head contains all the others (A ← B, C needs A and B → C stacks
+  on B). Dependencies on separate branches still wait for merges.
 - **Conformance** (`epic verify`): a read-only agent starts from the base
   branch, gets the ADR and the list of task branches and PRs, marks each
   Decision/Consequences statement `covered`/`partial`/`missing`, and

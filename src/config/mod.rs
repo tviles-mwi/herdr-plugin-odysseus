@@ -423,6 +423,10 @@ pub struct EpicConfig {
     /// merges); the base's remote branch is fetched before the dependent
     /// starts. GitHub is asked at most once a minute per dependency.
     pub merged_by_pr: bool,
+    /// Stacked mode with 2+ unmerged dependencies: when exactly one of them
+    /// contains every other one's head (they lie on one chain), stack on it
+    /// instead of waiting for merges.
+    pub stack_through_chains: bool,
 }
 
 impl Default for EpicConfig {
@@ -436,6 +440,7 @@ impl Default for EpicConfig {
             task_title_prefix: true,
             plan_verification: true,
             merged_by_pr: false,
+            stack_through_chains: false,
         }
     }
 }
