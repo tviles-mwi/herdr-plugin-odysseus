@@ -90,6 +90,8 @@ pub struct EngineCtx {
     pub poll: Duration,
     /// Overrides merged on top of every loaded config (CLI flags, tests).
     pub config_overrides: Option<serde_json::Value>,
+    /// `epic.merged_by_pr`: GitHub's last answer per dependency run.
+    pub pr_merge_checks: std::sync::Mutex<std::collections::HashMap<String, crate::epic::engine::PrMergeCheck>>,
 }
 
 impl EngineCtx {
@@ -105,6 +107,7 @@ impl EngineCtx {
             agent_slots: Slots::new(max_agents),
             poll: Duration::from_millis(500),
             config_overrides: None,
+            pr_merge_checks: Default::default(),
         })
     }
 

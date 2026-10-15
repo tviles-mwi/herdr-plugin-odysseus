@@ -7,6 +7,7 @@
 - **`branch` on epic plan tasks**: carried into the accepted task. Duplicate or invalid names fail plan validation.
 - **`epic.task_title_prefix`** (default `true`): `false` keeps the plan task's title as-is instead of `[E1/T1] <title>`, so `git.commit_message: "{{task_title}}"` can produce conventional commits.
 - **`epic.plan_verification`** (default `true`): `false` never splices a plan task's `verification` checks/commands into its runs (manual checks still reach the task), for workflows that own every gate.
+- **`epic.merged_by_pr`** (default `false`): a dependency whose run's PR is merged on GitHub counts as merged even when its head is not an ancestor of the base (squash and rebase merges), and the base's remote branch (e.g. `origin/development`) is fetched before the dependent starts. `gh` is asked at most once a minute per dependency; a `gh` or fetch error keeps the dependent waiting with the reason.
 - **`github.followup_workflow`** (default: the original run's workflow): the workflow PR follow-ups use (`run followup`, the dashboard's follow-up key), e.g. a lean push-and-fix-CI workflow instead of the full original pipeline.
 
 ### Fixed

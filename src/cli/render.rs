@@ -387,6 +387,9 @@ epic:
   dependency_mode: merged
   task_title_prefix: true
   plan_verification: true
+  # true: a dependency whose PR is merged on GitHub counts as merged even after
+  # a squash/rebase merge (gh asked at most once a minute; the base is fetched).
+  merged_by_pr: false
 
 # Child processes get only these variables (plus HERDR_ORCH_*).
 environment:

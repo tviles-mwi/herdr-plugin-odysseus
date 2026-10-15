@@ -364,3 +364,130 @@ fn plan_verification_false_never_splices_plan_checks() {
     assert!(!runs[0].workflow_yaml.contains("verification from the accepted plan"));
     assert_eq!(t1.manual_checks, vec!["look at part T1".to_string()], "manual checks still reach the task");
 }
+
+// ------------------------------------------- merged_by_pr / stack_through_chains
+
+/// One agent step per task with its own step id, so every task commits a
+/// different file (the fake writes `fake/<step>.txt`) and a stacked task's
+/// head really differs from its prerequisite's.
+fn per_task_workflows(h: &Harness, keys: &[&str]) {
+    for k in keys {
+        h.workflow(&format!("wf-{k}"), &format!("  - id: impl-{k}\n    type: agent\n    prompt: \"{{{{task}}}}\"\n"));
+    }
+}
+
+/// Plan task YAML for `set_plan`.
+fn plan_task(key: &str, deps: &[&str]) -> String {
+    let k = key.to_lowercase();
+    format!("  - key: {key}\n    title: part {k}\n    acceptance: [part {k} works]\n    workflow: wf-{k}\n    depends_on: [{}]\n", deps.join(", "))
+}
+
+/// An epic whose plan is exactly `tasks` (proposed, nothing accepted).
+fn epic_with_plan(h: &mut Harness, config: &str, tasks: &[(&str, &[&str])]) {
+    h.project_file("config.yaml", config);
+    per_task_workflows(h, &tasks.iter().map(|(k, _)| k.to_lowercase()).collect::<Vec<_>>().iter().map(String::as_str).collect::<Vec<_>>());
+    epic::create_epic(&h.ctx, &h.repo, std::path::Path::new("docs/adr/0007-rate-limiting.md"), Some("fake-plan".into()), "test").unwrap();
+    wait_epic(h, "E1", EpicStatus::Proposed);
+    let plan: String = tasks.iter().map(|(k, d)| plan_task(k, d)).collect();
+    epic::set_plan(&h.ctx, "E1", &format!("tasks:\n{plan}"), None).unwrap();
+}
+
+fn accept_keys(h: &Harness, keys: &[&str], base_ref: Option<&str>) -> herdr_orchestrator::epic::Epic {
+    epic::accept(
+        &h.ctx,
+        "E1",
+        AcceptOptions { only: Some(keys.iter().map(|k| k.to_string()).collect()), runner: Some("fake-success".into()), base_ref: base_ref.map(String::from), via: "test".into(), ..Default::default() },
+    )
+    .unwrap()
+}
+
+/// Tick for a while and return the task's waiting reason; it must not start.
+fn still_waiting(h: &mut Harness, task_id: &str) -> String {
+    let id = task_id.to_string();
+    h.until(Duration::from_millis(1500), |_| false);
+    let t = h.ctx.store.load_task(&id).unwrap();
+    assert!(t.run_ids.is_empty(), "task {id} started: {:?}", t.options.base_ref);
+    t.waiting_on.unwrap_or_default()
+}
+
+/// A repo with an `origin` remote; T(A) succeeds on its branch, then "GitHub"
+/// squash-merges it: origin/main gets a new commit with A's change that does
+/// NOT contain A's head, and the local origin/main is stale (no fetch yet).
+/// Returns (A's task id, the squash commit).
+fn squash_merged_prerequisite(h: &mut Harness, config: &str) -> (String, String) {
+    let gh = fake_gh(h.dir.path());
+    h.rebuild(|c| c.gh = herdr_orchestrator::github::Gh { bin: gh.clone() });
+    let remote = h.dir.path().join("remote.git");
+    git(h.dir.path(), &["clone", "-q", "--bare", h.repo.to_str().unwrap(), remote.to_str().unwrap()]);
+    git(&h.repo, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    git(&h.repo, &["fetch", "-q", "origin"]);
+    epic_with_plan(h, config, &[("A", &[]), ("B", &["A"])]);
+    let e = accept_keys(h, &["A"], Some("origin/main"));
+    let a = e.tasks["A"].clone();
+    let ra = h.settle(&a).remove(0);
+    assert_eq!(ra.status, RunStatus::Succeeded, "{:?}", ra.status_reason);
+    let mut ra2 = h.ctx.store.load_run(&ra.run_id).unwrap();
+    ra2.pr_url = Some("https://github.com/o/r/pull/7".into());
+    h.ctx.store.save_run(&ra2).unwrap();
+    // The squash merge happens on GitHub, i.e. in another clone.
+    let other = h.dir.path().join("other");
+    git(h.dir.path(), &["clone", "-q", remote.to_str().unwrap(), other.to_str().unwrap()]);
+    std::fs::create_dir_all(other.join("fake")).unwrap();
+    std::fs::write(other.join("fake/impl-a.txt"), "change by impl-a attempt 1\n").unwrap();
+    git(&other, &["add", "."]);
+    git(&other, &["-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "-m", "part a (#7)"]);
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    let out = std::process::Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&other).output().unwrap();
+    let squash = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // A's own commit never left the local repo, so the squash commit cannot contain it.
+    (a, squash)
+}
+
+const MERGED_BY_PR: &str = "epic:\n  task_workflow: acc-only\n  dependency_mode: merged\n  merged_by_pr: true\n";
+
+#[test]
+fn merged_by_pr_starts_a_dependent_after_a_squash_merge() {
+    let mut h = setup("merged");
+    let (_a, squash) = squash_merged_prerequisite(&mut h, MERGED_BY_PR);
+    std::fs::write(h.dir.path().join("gh-view.json"), r#"{"state":"MERGED","mergedAt":"2026-10-15T00:00:00Z"}"#).unwrap();
+    let e = accept_keys(&h, &["B"], Some("origin/main"));
+    let b = e.tasks["B"].clone();
+    let rb = h.settle(&b).remove(0);
+    assert_eq!(rb.status, RunStatus::Succeeded, "{:?}", rb.status_reason);
+    assert_eq!(rb.git.base_ref, "origin/main", "starts fresh from the base, not stacked");
+    assert_eq!(rb.git.base_sha.as_deref(), Some(squash.as_str()), "the base was fetched before the dependent started");
+    assert!(std::fs::read_to_string(h.dir.path().join("gh.log")).unwrap().contains("pr view https://github.com/o/r/pull/7"));
+}
+
+#[test]
+fn merged_by_pr_keeps_waiting_while_the_pr_is_open() {
+    let mut h = setup("merged");
+    squash_merged_prerequisite(&mut h, MERGED_BY_PR);
+    std::fs::write(h.dir.path().join("gh-view.json"), r#"{"state":"OPEN","mergedAt":null}"#).unwrap();
+    let e = accept_keys(&h, &["B"], Some("origin/main"));
+    let why = still_waiting(&mut h, &e.tasks["B"]);
+    assert!(why.contains("merged"), "{why}");
+    let log = std::fs::read_to_string(h.dir.path().join("gh.log")).unwrap();
+    assert_eq!(log.matches("pr view").count(), 1, "asked GitHub once (rate-limited per dependency): {log}");
+}
+
+#[test]
+fn merged_by_pr_never_counts_a_gh_error_as_merged() {
+    let mut h = setup("merged");
+    squash_merged_prerequisite(&mut h, MERGED_BY_PR);
+    std::fs::write(h.dir.path().join("gh-view.json"), "not json").unwrap();
+    let e = accept_keys(&h, &["B"], Some("origin/main"));
+    let why = still_waiting(&mut h, &e.tasks["B"]);
+    assert!(why.contains("PR state"), "the reason says GitHub could not be asked: {why}");
+}
+
+#[test]
+fn without_merged_by_pr_a_squash_merged_dependency_strands_the_dependent() {
+    let mut h = setup("merged");
+    squash_merged_prerequisite(&mut h, "epic:\n  task_workflow: acc-only\n  dependency_mode: merged\n");
+    std::fs::write(h.dir.path().join("gh-view.json"), r#"{"state":"MERGED"}"#).unwrap();
+    let e = accept_keys(&h, &["B"], Some("origin/main"));
+    let why = still_waiting(&mut h, &e.tasks["B"]);
+    assert!(why.contains("merged"), "{why}");
+    assert!(!std::fs::read_to_string(h.dir.path().join("gh.log")).unwrap_or_default().contains("pr view"), "gh is not asked when the option is off");
+}

@@ -504,6 +504,24 @@ pub fn push_branch(worktree: &Path, remote: &str, branch: &str) -> Result<()> {
         .map(|_| ())
 }
 
+/// Fetch the remote branch behind a remote-tracking ref like
+/// `origin/development` (updating that ref). `Ok(false)` when `rev` is not
+/// `<remote>/<branch>` for a configured remote (a local base: nothing to fetch).
+pub fn fetch_tracking_ref(repo: &Path, rev: &str) -> Result<bool> {
+    let Some((remote, branch)) = rev.split_once('/') else { return Ok(false) };
+    if remote.is_empty() || branch.is_empty() || remote.starts_with('-') || branch.starts_with('-') || branch.contains(':') {
+        return Ok(false);
+    }
+    let remotes = git(repo, &["remote"])?;
+    if !remotes.lines().any(|r| r.trim() == remote) {
+        return Ok(false);
+    }
+    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let hooks = format!("core.hooksPath={null}");
+    let refspec = format!("+refs/heads/{branch}:refs/remotes/{remote}/{branch}");
+    run_tool(&["git", "-c", &hooks, "fetch", "--quiet", "--no-tags", remote, &refspec], repo, Duration::from_secs(120)).map(|_| true)
+}
+
 pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
     git(repo, &["remote", "get-url", remote]).ok().map(|s| s.trim().to_string())
 }

@@ -265,6 +265,14 @@ impl Gh {
         self.call(repo_dir, &["project", "item-add", &number.to_string(), "--owner", owner, "--url", url], Duration::from_secs(60)).map(|_| ())
     }
 
+    /// A PR's state as GitHub reports it (`OPEN`, `CLOSED`, `MERGED`).
+    pub fn pr_state(&self, repo_dir: &Path, url: &str) -> Result<String> {
+        parse_pr_url(url).with_context(|| format!("not a GitHub pull request URL: {url}"))?;
+        let out = self.call(repo_dir, &["pr", "view", url, "--json", "state,mergedAt"], Duration::from_secs(30))?;
+        let v: serde_json::Value = serde_json::from_str(out.trim()).context("parsing gh pr view output")?;
+        v["state"].as_str().map(str::to_ascii_uppercase).context("gh pr view returned no state")
+    }
+
     pub fn pr_feedback(&self, repo_dir: &Path, url: &str) -> Result<PrFeedback> {
         let (slug, n) = parse_pr_url(url).with_context(|| format!("not a GitHub pull request URL: {url}"))?;
         let view = self.call(repo_dir, &["pr", "view", url, "--json", "number,url,state,reviews,comments,statusCheckRollup"], Duration::from_secs(60))?;

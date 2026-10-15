@@ -561,10 +561,18 @@ pub fn dependency_state(ctx: &EngineCtx, task: &Task) -> Result<DepState> {
             .or_else(|| dep.run_ids.iter().filter_map(|id| ctx.store.load_run(id).ok()).find(|r| r.status == RunStatus::Succeeded));
         let Some(run) = run else { return Ok(DepState::Waiting(format!("#{dep_id} has no successful run selected"))) };
         let head = run.git.head_sha.clone().or_else(|| run.git.commits.last().cloned());
-        let merged = match &head {
+        let mut merged = match &head {
             Some(h) => run.git.base_sha.as_deref() == Some(h.as_str()) || crate::git::is_ancestor(&task.repo_root, h, &base),
             None => true, // nothing was committed: nothing to wait for
         };
+        if !merged && cfg.config.epic.merged_by_pr {
+            if let Some(url) = &run.pr_url {
+                match pr_merged(ctx, &task.repo_root, &run.run_id, url, &base) {
+                    Ok(m) => merged = m,
+                    Err(why) => return Ok(DepState::Waiting(format!("waiting for #{dep_id}: {why}"))),
+                }
+            }
+        }
         if !merged {
             unmerged.push((dep_id.clone(), run.git.branch.clone().unwrap_or_default()));
         }
@@ -582,6 +590,39 @@ pub fn dependency_state(ctx: &EngineCtx, task: &Task) -> Result<DepState> {
             unmerged.iter().map(|(id, _)| format!("#{id}")).collect::<Vec<_>>().join(", ")
         ))),
     }
+}
+
+/// `epic.merged_by_pr`: GitHub's last answer for one dependency run.
+#[derive(Debug, Clone)]
+pub struct PrMergeCheck {
+    at: std::time::Instant,
+    /// `Ok(true)` merged and the base fetched; `Ok(false)` not merged yet;
+    /// `Err` why we could not tell (never counted as merged).
+    answer: std::result::Result<bool, String>,
+}
+
+/// How often GitHub is asked about one dependency's PR (ticks are ~100 ms).
+const PR_RECHECK: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Whether a dependency's PR is merged on GitHub. When it is, the base's
+/// remote branch is fetched once so the dependent starts from the merge.
+fn pr_merged(ctx: &EngineCtx, repo: &Path, run_id: &str, url: &str, base: &str) -> std::result::Result<bool, String> {
+    let mut checks = ctx.pr_merge_checks.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(c) = checks.get(run_id) {
+        if c.answer == Ok(true) || c.at.elapsed() < PR_RECHECK {
+            return c.answer.clone();
+        }
+    }
+    let answer = match ctx.gh.pr_state(repo, url) {
+        Err(e) => Err(format!("cannot read the PR state of {url}: {e:#}")),
+        Ok(state) if state != "MERGED" => Ok(false),
+        Ok(_) => match crate::git::fetch_tracking_ref(repo, base) {
+            Ok(_) => Ok(true),
+            Err(e) => Err(format!("{url} is merged, but fetching {base} failed: {e:#}")),
+        },
+    };
+    checks.insert(run_id.to_string(), PrMergeCheck { at: std::time::Instant::now(), answer: answer.clone() });
+    answer
 }
 
 /// Human override: start a task regardless of its dependencies.

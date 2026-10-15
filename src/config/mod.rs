@@ -418,6 +418,11 @@ pub struct EpicConfig {
     /// runs as extra gate steps. `false` ignores them (manual checks still
     /// reach the task): for workflows that own every gate themselves.
     pub plan_verification: bool,
+    /// Count a dependency as merged when its run's PR is merged on GitHub,
+    /// even if its head is not an ancestor of the base (squash and rebase
+    /// merges); the base's remote branch is fetched before the dependent
+    /// starts. GitHub is asked at most once a minute per dependency.
+    pub merged_by_pr: bool,
 }
 
 impl Default for EpicConfig {
@@ -430,6 +435,7 @@ impl Default for EpicConfig {
             dependency_mode: DependencyMode::Merged,
             task_title_prefix: true,
             plan_verification: true,
+            merged_by_pr: false,
         }
     }
 }

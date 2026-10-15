@@ -567,6 +567,10 @@ herdr-orchestrator epic verify E1                             # conformance revi
   dependency and its PR targets that branch. A failed or cancelled
   dependency marks the dependent `blocked`; `task unblock <id>` starts it
   anyway. The dashboard shows why a queued task waits.
+  `epic.merged_by_pr: true` also counts a dependency as merged when its
+  PR is merged on GitHub (squash and rebase merges never make the head an
+  ancestor of the base); the base's remote branch is fetched first, and
+  `gh` is asked at most once a minute per dependency.
 - **Conformance** (`epic verify`): a read-only agent starts from the base
   branch, gets the ADR and the list of task branches and PRs, marks each
   Decision/Consequences statement `covered`/`partial`/`missing`, and
